@@ -9,3 +9,6 @@ The player can utilize an application on their in-game laptop item to take photo
 
 ## Neighbor State Machine
 In the game, NPC characters are randomly assigned to houses with randomized features; additionally one is randomly assigned as the killer. This script controls all NPC behaviors.
+
+## Van Enemy
+This script manages an enemy within the game which may chase the player under certain circumstances.
