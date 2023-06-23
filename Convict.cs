@@ -10,23 +10,21 @@ public class Convict : MonoBehaviour
 {
     public List<Transform> searchingDestinations;
     public Transform SittingTransform;
-    [HideInInspector]public PlayerMovement1stPerson player;
-    [HideInInspector]public ConvictStateMachine stateMachine;
+    public ConvictStateMachine stateMachine;
+
     void Awake(){
-        player = GameObject.FindObjectOfType<PlayerMovement1stPerson>();
-        stateMachine = new ConvictStateMachine(player, this);
+        stateMachine = new ConvictStateMachine();
         gameObject.SetActive(false);
     }
 }
 public class ConvictStateMachine{
-    public ConvictStateMachine(PlayerMovement1stPerson player, Convict convict){
-        this.player = player;
-        this.convict = convict;
-    }
     public PlayerMovement1stPerson player;
     public Convict convict;
     public ConvictState currentState;
+
     void Awake(){
+        player = GameObject.FindObjectOfType<PlayerMovement1stPerson>();
+        convict = GameObject.FindObjectOfType<Convict>();
         currentState = new Waiting();
         currentState.Enter();
     }
