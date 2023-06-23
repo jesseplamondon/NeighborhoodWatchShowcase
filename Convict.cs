@@ -8,13 +8,16 @@ using random = System.Random;
 
 public class Convict : MonoBehaviour
 {
-    public List<Transform> searchingDestinations;
-    public Transform SittingTransform;
-    public ConvictStateMachine stateMachine;
+    [HideInInspector]public List<Transform> searchingDestinations;
+    [HideInInspector]public ConvictStateMachine stateMachine;
 
     void Awake(){
         stateMachine = new ConvictStateMachine();
         gameObject.SetActive(false);
+        Transform destinationsTransform = GameObject.Find("ConvictSearchingDestinations").transform;
+        for(int i = 0; i<destinationsTransform.childCount; i++){
+            searchingDestinations.Add(destinationsTransform.GetChild(i));
+        }
     }
 }
 public class ConvictStateMachine{
