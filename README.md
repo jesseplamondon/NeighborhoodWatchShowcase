@@ -1,6 +1,9 @@
 # NeighborhoodWatchShowcase
 A showcase of some of the features and scripts from my game "Neighborhood Watch"
 
+## Convict
+This script manages an enemy NPC, which has various states that it can enter.
+
 ## Crypto Manager
 The player can utilize an application on their in-game laptop item to trade crypto. This is the primary script for this feature.
 
