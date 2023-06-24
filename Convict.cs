@@ -13,11 +13,17 @@ public class Convict : MonoBehaviour
 
     void Awake(){
         stateMachine = new ConvictStateMachine();
-        gameObject.SetActive(false);
+        stateMachine.Init();
+        for(int i = 0; i<transform.childCount; i++){
+            transform.GetChild(i).gameObject.SetActive(false);
+        }
         Transform destinationsTransform = GameObject.Find("ConvictSearchingDestinations").transform;
         for(int i = 0; i<destinationsTransform.childCount; i++){
             searchingDestinations.Add(destinationsTransform.GetChild(i));
         }
+    }
+    void Update(){
+        stateMachine.Update();
     }
 }
 public class ConvictStateMachine{
@@ -25,10 +31,11 @@ public class ConvictStateMachine{
     public Convict convict;
     public ConvictState currentState;
 
-    void Awake(){
+    public void Init(){
         player = GameObject.FindObjectOfType<PlayerMovement1stPerson>();
         convict = GameObject.FindObjectOfType<Convict>();
         currentState = new Waiting();
+        currentState.SetPlayerConvict(player, convict);
         currentState.Enter();
     }
     public void Update(){
@@ -56,7 +63,13 @@ public class ConvictState{
         }
         stateMachine.currentState = (ConvictState)Activator.CreateInstance(Type.GetType(s.ToString()));
         stateMachine.currentState.SetPlayerConvict(player,convict);
+        stateMachine.currentState.SetPlayerConvict(player, convict);
         stateMachine.currentState.Enter();
+    }
+    protected void CheckForPlayer(){
+        if(!player.hidden){
+            ChangeState(States.ConvictKilling);
+        }
     }
 }
 public class Waiting:ConvictState{
@@ -65,13 +78,15 @@ public class Waiting:ConvictState{
     public override void Enter(){
         start = DateTime.Now;
     }
-    public void Execute(){
+    public override void Execute(){
         if(DateTime.Now-start>=TimeSpan.FromSeconds(waitTime)){
             ChangeState(States.SearchingForPlayer);
         }
     }
     public override void Exit(){
-        convict.gameObject.SetActive(true);
+        for(int i = 0; i<convict.transform.childCount; i++){
+            convict.transform.GetChild(i).gameObject.SetActive(true);
+        }
     }
 }
 public class SearchingForPlayer:ConvictState{
@@ -87,10 +102,8 @@ public class SearchingForPlayer:ConvictState{
         convict.GetComponent<NavMeshAgent>().SetDestination(destination);
     }
     public override void Execute(){
-        if(!player.hidden){
-            ChangeState(States.ConvictKilling);
-        }
-        if(Vector3.Distance(destination, convict.transform.position)<=1f&&!atDestination){
+        CheckForPlayer();
+        if(Vector3.Distance(destination, convict.transform.position)<=0.7f&&!atDestination){
             if(destinationIndex==convict.searchingDestinations.Count){
                 ChangeState(States.ConvictSitting);
                 return;
@@ -102,6 +115,7 @@ public class SearchingForPlayer:ConvictState{
         }
     }
     IEnumerator Looking(){
+        CheckForPlayer();
         yield return new WaitUntil(()=>DateTime.Now-start>=TimeSpan.FromSeconds(lookTime));
         atDestination = false; 
         destination = convict.searchingDestinations[destinationIndex].position;
@@ -115,9 +129,11 @@ public class ConvictSitting:ConvictState{
     public override void Enter(){
         animationString = "Sitting";
         start = DateTime.Now;
+        Quaternion.Slerp(convict.transform.rotation, Quaternion.identity, 1f*Time.deltaTime);
     }
     public override void Execute(){
-        if(DateTime.Now-start<=TimeSpan.FromSeconds(sitTime)){
+        CheckForPlayer();
+        if(DateTime.Now-start>=TimeSpan.FromSeconds(sitTime)){
             ChangeState(States.ConvictLeaving);
         }
     }
@@ -126,6 +142,7 @@ public class ConvictLeaving:ConvictState{
     Vector3 destination;
     public override void Enter(){
         base.Enter();
+        destination = GameObject.FindObjectOfType<BusStop>().convictStartTransform.position;
         convict.GetComponent<NavMeshAgent>().SetDestination(destination);
     }
     public override void Execute(){
@@ -135,8 +152,12 @@ public class ConvictLeaving:ConvictState{
     }
 }
 public class ConvictKilling:ConvictState{
+    DateTime start;
     public override void Enter(){
         animationString = "isKilling";
         base.Enter();
+    }
+    void GameOver(){
+        GameObject.FindObjectOfType<GameManagerScript>().GameOver("Convict");
     }
 }
