@@ -66,11 +66,6 @@ public class ConvictState{
         stateMachine.currentState.SetPlayerConvict(player, convict);
         stateMachine.currentState.Enter();
     }
-    protected void CheckForPlayer(){
-        if(!player.hidden){
-            ChangeState(States.ConvictKilling);
-        }
-    }
 }
 public class Waiting:ConvictState{
     DateTime start;
@@ -102,7 +97,6 @@ public class SearchingForPlayer:ConvictState{
         convict.GetComponent<NavMeshAgent>().SetDestination(destination);
     }
     public override void Execute(){
-        CheckForPlayer();
         if(Vector3.Distance(destination, convict.transform.position)<=0.7f&&!atDestination){
             if(destinationIndex==convict.searchingDestinations.Count){
                 ChangeState(States.ConvictSitting);
@@ -115,7 +109,6 @@ public class SearchingForPlayer:ConvictState{
         }
     }
     IEnumerator Looking(){
-        CheckForPlayer();
         yield return new WaitUntil(()=>DateTime.Now-start>=TimeSpan.FromSeconds(lookTime));
         atDestination = false; 
         destination = convict.searchingDestinations[destinationIndex].position;
@@ -132,7 +125,6 @@ public class ConvictSitting:ConvictState{
         Quaternion.Slerp(convict.transform.rotation, Quaternion.identity, 1f*Time.deltaTime);
     }
     public override void Execute(){
-        CheckForPlayer();
         if(DateTime.Now-start>=TimeSpan.FromSeconds(sitTime)){
             ChangeState(States.ConvictLeaving);
         }
