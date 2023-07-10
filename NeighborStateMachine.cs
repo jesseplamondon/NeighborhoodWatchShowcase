@@ -21,6 +21,8 @@ public class NeighbourStateMachine : MonoBehaviour{
     public Neighbour neighbour;
     public DateTime LeavingWaitStart;
     public bool kill;
+    public PlayerData.Locations attackLocation;
+    public Neighbour killingNeighbour;
 
     public DateTime maxKillStart;
     private int maxKillGap=300;
@@ -34,7 +36,7 @@ public class NeighbourStateMachine : MonoBehaviour{
     public void Update()
     {
         currentState!.Execute();
-        if(neighbour.isGuilty&&DateTime.Now-LeavingWaitStart>=TimeSpan.FromSeconds(175f)&&!(currentState.GetType()!=State.States.Leaving.GetType()||currentState.GetType()!=State.States.Returning.GetType())){
+        if(neighbour.isGuilty&&DateTime.Now-LeavingWaitStart>=TimeSpan.FromSeconds(175f)&&!(currentState.GetType()!=State.States.Leaving.GetType()||currentState.GetType()!=State.States.Returning.GetType()||currentState.GetType()!=State.States.BreakingIn.GetType()||currentState.GetType()!=State.States.Attacking.GetType()||currentState.GetType()!=State.States.Searching.GetType()||currentState.GetType()!=State.States.Returning.GetType()||currentState.GetType()!=State.States.KillingNeighbour.GetType()||currentState.GetType()!=State.States.KillingPlayer.GetType())){
             ChangeState(State.States.Leaving);
         }
         if(DateTime.Now-maxKillStart>=TimeSpan.FromSeconds(maxKillGap)&&!kill&&neighbour.isGuilty){
@@ -43,9 +45,10 @@ public class NeighbourStateMachine : MonoBehaviour{
                 case "Searching":
                 case "Leaving":
                 case "Returning":
+                case "Attacking":
                     break;
                 case "Left":
-                    ChangeState(State.States.KillingNeighbour);
+                    ChangeState(State.States.Attacking);
                     break;
                 default:
                     ChangeState(State.States.Leaving);
@@ -55,6 +58,7 @@ public class NeighbourStateMachine : MonoBehaviour{
         }
     }
     public void ChangeState(State.States s){
+        //if(neighbour.isGuilty){Debug.Log(s.ToString());}
         prevState = currentState;
         if(currentState!=null){
             currentState.Exit();
@@ -65,7 +69,7 @@ public class NeighbourStateMachine : MonoBehaviour{
     }
 }
 public class State{
-    public enum States{Roaming, GoingToSit, Sitting, Leaving, Left, Returning, Chasing, BreakingIn, Searching, Dead, KillingNeighbour, WaitingToKillPlayer, KillingPlayer, GoingToMail, GettingMail, GoHome, GoingToGarbage, GettingGarbage, DisposingGarbage, GoingToPhone, AnsweringPhone};
+    public enum States{Roaming, GoingToSit, Sitting, Leaving, Attacking, Left, Returning, Chasing, BreakingIn, Searching, Dead, KillingNeighbour, WaitingToKillPlayer, KillingPlayer, GoingToMail, GoHome, GoingToGarbage, GettingGarbage, DisposingGarbage, GoingToPhone, AnsweringPhone};
     public GameObject NeighbourAttackerObject;
     public float yCoord = -3.517888f;
     public Neighbour neighbour;
@@ -98,7 +102,8 @@ public class State{
     }
     public void CheckForDoorClosed(){
         RaycastHit hit;
-        if(Physics.Raycast(neighbour.transform.position, neighbour.transform.forward, out hit, 2.5f)){
+        GameObject avatar = neighbour.stateMachine.currentState.GetType().ToString()=="Searching"?neighbour.stateMachine.currentState.NeighbourAttackerObject:neighbour.gameObject;
+        if(Physics.Raycast(avatar.transform.position, avatar.transform.forward, out hit, 2.5f)){
             Door door = hit.collider.GetComponent<Door>();
             if(door!=null){
                 door.Open();
@@ -126,7 +131,7 @@ public class State{
     }
 }
 public class Roaming:State{
-    private float walkRadius = 5f;
+    private float walkRadius = 7f;
     private Vector3 destination;
     private random rand;
     public Roaming(){
@@ -148,7 +153,7 @@ public class Roaming:State{
         }
         CheckForDoorClosed();
         if(DateTime.Now-start<=TimeSpan.FromSeconds(duration)){
-            if(Vector3.Distance(destination, neighbour.transform.position)<=1f)
+            if(Vector3.Distance(destination, neighbour.transform.position)<=1.7f)
                 SetRoamLocation();
         }
         else{
@@ -175,13 +180,14 @@ public class Roaming:State{
                 }
             }
             int roll = rand.Next(0,5);
-            if(roll==0&&leavingCount<=neighbours.Count-2&&(mailCount+garbageCount+leavingCount)<neighbours.Count-3){
+            if((roll==0||roll==4)&&leavingCount<=neighbours.Count-2&&(mailCount+garbageCount+leavingCount)<neighbours.Count-3){
                 neighbour.stateMachine.ChangeState(States.Leaving);
             }
             else{
                 roll = rand.Next(0, 6);
                 if(roll==2&&mailCount<3&&(mailCount+garbageCount+leavingCount)<neighbours.Count-3) neighbour.stateMachine.ChangeState(States.GoingToMail);
                 else if(roll==1&&garbageCount<3&&(mailCount+garbageCount+leavingCount)<neighbours.Count-3) neighbour.stateMachine.ChangeState(States.GettingGarbage);
+                else if(roll==4||roll==5){neighbour.stateMachine.ChangeState(States.Roaming);}
                 else{neighbour.stateMachine.ChangeState(States.GoingToSit);}
             }
         }
@@ -220,7 +226,8 @@ public class GoingToSit:State{
     }
     public override void Execute(){
         CheckChase();
-        if(Vector3.Distance(neighbour.transform.position, neighbour.chairPos)<=2f)
+        CheckForDoorClosed();
+        if(Vector3.Distance(neighbour.transform.position, neighbour.chairPos)<=3f)
             neighbour.stateMachine.ChangeState(States.Sitting);
     }
 }
@@ -228,8 +235,9 @@ public class Sitting:State{
     public Sitting(){
         start = DateTime.Now;
         animationString = "isSitting";
-        duration = 30f;
+        duration = 22f;
         this.neighbour = neighbour;
+        //Quaternion.Slerp(neighbour.transform.rotation, GameObject.Find(neighbour.address).transform.Find("Sofa").rotation, 1f*Time.deltaTime);
     }
     public override void Execute(){
         CheckChase();
@@ -257,6 +265,7 @@ public class Leaving:State{
         PlayFootstepsAudio();
     }
     public override void Execute(){
+        CheckForDoorClosed();
         if(neighbour.isGuilty&&IsPlayerInSphere()){
             neighbour.StopCoroutine(WaitForCar());
             neighbour.transform.position = neighbour.car.transform.position+ new Vector3(0f, 0f, 1f);
@@ -265,11 +274,10 @@ public class Leaving:State{
         }
     }
     IEnumerator WaitForReachCar(){
-        yield return new WaitUntil(()=> Vector3.Distance(neighbour.transform.position, neighbour.car.transform.position)<=4f);
+        yield return new WaitUntil(()=> Vector3.Distance(neighbour.transform.position, neighbour.car.transform.position)<=3f);
         StopFootstepsAudio();
-        CheckForDoorClosed();
         neighbour.ChangeVisibility(false);
-        neighbour.agent.ResetPath();
+        neighbour.agent.SetDestination(neighbour.transform.position);
         neighbour.GetComponent<CapsuleCollider>().enabled = false;
         neighbour.car.DriveAway();
         neighbour.StartCoroutine(WaitForCar());
@@ -280,24 +288,22 @@ public class Leaving:State{
             if(!neighbour.stateMachine.kill){
                 int roll = rand.Next(0, 11);
                 switch(roll){
-                    case 1: case 3: case 4: case 7: case 8: case 10:
-                        neighbour.stateMachine.ChangeState(States.KillingNeighbour);
-                        break;
-                    case 2: case 9:
+                    case 9: case 4:
                         neighbour.stateMachine.ChangeState(States.Left);
                         break;
                     default:
-                        neighbour.car.gameObject.SetActive(false);
-                        if(neighbour.player.inPlayerHouse||neighbour.player.isInCloset)
+                        /* neighbour.car.gameObject.SetActive(false);
+                        if(neighbour.player.inPlayerHouse||neighbour.player.hidden)
                             neighbour.stateMachine.ChangeState(States.BreakingIn);
                         else{
                             neighbour.stateMachine.ChangeState(States.Searching);
-                        }
+                        } */
+                        neighbour.stateMachine.ChangeState(States.Attacking);
                         break;
                 }
             }
             else{
-                neighbour.stateMachine.ChangeState(States.KillingNeighbour);
+                neighbour.stateMachine.ChangeState(States.Attacking);
                 neighbour.stateMachine.kill=false;
             }
         }
@@ -306,13 +312,81 @@ public class Leaving:State{
         }
     }
 }
+public class Attacking:State{
+    private random rand = new random();
+    private string location;
+    GameObject house;
+    private Room room;
+    private Neighbour kneighbour;
+    public override void Enter(){
+        PlayerData.Locations playerLoc = GameObject.FindObjectOfType<PlayerMovement1stPerson>().playerData.location;
+        int roll = rand.Next(0,3);
+        if(!neighbour.stateMachine.kill&&roll==2&&playerLoc!=PlayerData.Locations.Outside&&playerLoc!=PlayerData.Locations.BusStop){
+            location = playerLoc.ToString();
+        }
+        else{
+            do{
+                roll = rand.Next(0, Enum.GetNames(typeof(PlayerData.Locations)).Length-3);
+                string[] locs = System.Enum.GetNames(typeof(PlayerData.Locations));
+                location = locs[roll].Replace("House", "");
+                kneighbour = new Neighbour();
+                neighbourManager NM = GameObject.FindObjectOfType<neighbourManager>();
+                bool livingNeighbourFound;
+                foreach(GameObject obj in NM.neighbours){
+                    Neighbour n = obj.GetComponent<Neighbour>();
+                    if(n.address == location){
+                        kneighbour = n;
+                        livingNeighbourFound = true;
+                        break;
+                    }
+                }
+                Debug.Log(location);
+                if(!livingNeighbourFound){
+                    //all neighbours are dead -> GameOver
+                    kneighbour.stateMachine.ChangeState(States.KillingPlayer);
+                    return;
+                }
+            }
+            while(!kneighbour.alive||location==neighbour.address);
+        }
+        if(location=="PlayerHouse"){
+            neighbour.stateMachine.ChangeState(States.BreakingIn);
+            return;
+        }
+        //get house gameobject
+        GameObject houses = GameObject.Find("Houses");
+        for(int i = 0; i<houses.transform.childCount; i++){
+            if(houses.transform.GetChild(i).name==location){
+                house = houses.transform.GetChild(i).gameObject;
+            }
+        }
+        //get room in house to inhabit (trigger)
+        GameObject t = house.transform.Find("Triggers").gameObject;
+        room = t.transform.GetChild(rand.Next(0, t.transform.childCount)).GetComponent<Room>();
+        Debug.Log(room.name);
+    }
+    public override void Execute(){
+        //wait for player/neighbour to enter trigger
+        if(room.inhabitant!=null){
+            if(room.inhabitant.GetComponent<PlayerMovement1stPerson>()!=null){
+                neighbour.stateMachine.ChangeState(States.KillingPlayer);
+            }
+            else{
+                room.inhabitant = null;
+                neighbour.stateMachine.ChangeState(States.KillingNeighbour);
+            }
+        }
+    }
+    public override void Exit(){
+        neighbour.stateMachine.killingNeighbour = kneighbour;
+    }
+}
 public class Left:State{
     public Left(){
         this.start = DateTime.Now;
-        this.duration = 100f;
+        this.duration = 50f;
     }
     public override void Enter(){
-        neighbour.ChangeVisibility(false);
         neighbour.car.gameObject.SetActive(false);
     }
     public override void Execute(){
@@ -354,7 +428,7 @@ public class Chasing:State{
         PlayFootstepsAudio();
     }
     public override void Execute(){
-        if(IsPlayerInSphere()&&!(neighbour.player.isInCloset||neighbour.player.inPlayerHouse))
+        if(IsPlayerInSphere()&&!(neighbour.player.hidden||neighbour.player.inPlayerHouse))
             Chase();
         else{
             switch(neighbour.stateMachine.prevState.GetType().ToString()){
@@ -389,10 +463,7 @@ public class BreakingIn:State{
     }
     public override void Execute(){
         if(DateTime.Now-start>=TimeSpan.FromSeconds(duration)){
-            if(neighbour.player.isInCloset){
-                neighbour.stateMachine.ChangeState(States.Searching);
-            }
-            else if(neighbour.player.inPlayerHouse){
+            if(neighbour.player.inPlayerHouse&&!neighbour.player.hidden){
                 neighbour.stateMachine.ChangeState(States.KillingPlayer);
                 neighbour.stateMachine.killPos = new Vector3(-10.85213f, -3.96f, -9.79f);
             }
@@ -406,7 +477,6 @@ public class BreakingIn:State{
         NeighbourAttackerObject = GameObject.Instantiate(neighbour.NeighbourAttackerObjectPrefab, new Vector3(5.11f, -3.521974f, -10.22f), Quaternion.Euler(0f, 182.777f, 0f));
         //NeighbourAttackerObject.GetComponent<NavMeshAgent>().ResetPath();
         NeighbourAttackerObject.GetComponent<Animator>().SetBool("isBreakingIn",true);
-        neighbour.ChangeVisibility(false);
     }
 }
 public class Searching:State{
@@ -415,8 +485,11 @@ public class Searching:State{
     bool searching = true;
     List<Vector3> searchLocs;
     public Vector3 searchDestination;
-    public GameObject NeighbourAttackerObject;
+    public DateTime start;
+    public int cutoff=160;
+    private bool cuttoffReached;
     public Searching(){
+        start = DateTime.Now;
         audioManager = GameObject.Find("AudioManager").GetComponent<AudioManager>();
         searchLocs = new List<Vector3>();
         searchLocs.Add(new Vector3(6.179663f, -3.517888f,-28.25553f));
@@ -432,12 +505,18 @@ public class Searching:State{
         SearchHouse();
     }
     public override void Execute(){
-        CheckForDoorClosed();
-        if(!neighbour.player.isInCloset&&neighbour.player.inPlayerHouse){
-            neighbour.stateMachine.ChangeState(States.KillingPlayer);
+        if(DateTime.Now-start>=TimeSpan.FromSeconds(cutoff)&&!cuttoffReached){
+            cuttoffReached = true;
+            searchDestination = searchLocs[searchLocs.Count-1];
         }
         else{
-            GoToNewLocation(NeighbourAttackerObject.transform.position.x);
+            CheckForDoorClosed();
+            if(!neighbour.player.hidden&&neighbour.player.inPlayerHouse){
+                neighbour.stateMachine.ChangeState(States.KillingPlayer);
+            }
+            else{
+                GoToNewLocation(NeighbourAttackerObject.transform.position.x);
+            }
         }
     }
     void SearchHouse(){
@@ -453,8 +532,8 @@ public class Searching:State{
         GameObject.Destroy(NeighbourAttackerObject);
     }
     void GoToNewLocation(float x){
-        if(Vector3.Distance(NeighbourAttackerObject.transform.position, searchDestination)<=0.2f){
-            if(searchLocs.IndexOf(searchDestination)!=searchLocs.Count-2){
+        if(Vector3.Distance(NeighbourAttackerObject.transform.position, searchDestination)<=1f){
+            if(searchLocs.IndexOf(searchDestination)!=searchLocs.Count-2&&!cuttoffReached){
                 searchDestination = searchLocs[searchLocs.IndexOf(searchDestination)+1];
                 NeighbourAttackerObject.GetComponent<NeighbourSearch>().searchDestination = searchDestination;
                 //PlayLookAround();
@@ -481,47 +560,58 @@ public class Dead:State{
 public class KillingNeighbour:State{
     neighbourManager NM;
     random rand;
+    GameObject Attacker;
     public KillingNeighbour(){
         NM = GameManager.FindObjectOfType<neighbourManager>();
         rand = new random();
     }
     public override void Enter(){
-        KillNeighbour(GetNeighbour()!);
-        neighbour.stateMachine.ChangeState(States.Left);
+        Attacker = GameObject.Instantiate(neighbour.NeighbourAttackerObjectPrefab, neighbour.stateMachine.killingNeighbour.transform.position+(-3f*neighbour.stateMachine.killingNeighbour.transform.forward), Quaternion.Euler(-1*neighbour.stateMachine.killingNeighbour.transform.forward));
+        Attacker.GetComponent<Animator>().SetBool("isAttacking", true);
+        Neighbour n = neighbour.stateMachine.killingNeighbour;
+        if(n!=null){
+            //instantiate attacker behind neighbour
+            KillNeighbour(n);
+            neighbour.stateMachine.ChangeState(States.Left);
+        }
     }
     public override void Exit(){
-        neighbour.car.gameObject.SetActive(true);
+        GameObject.Destroy(Attacker);
         neighbour.stateMachine.maxKillStart = DateTime.Now;
     }
-    public Neighbour GetNeighbour(){
+    /* public Neighbour GetNeighbour(){
         if(NM.neighbours.Count!=0){
             List<GameObject> G = NM.neighbours;
             for(int i = 0; i<NM.neighbours.Count;i++){
-                Neighbour n = G[rand.Next(0, G.Count)].GetComponent<Neighbour>();
-                if(n.alive&&!n.isGuilty)
+                Neighbour n = G[rand.Next(0, G.Count)].GetComponent<Neighbour>();//stackoverflow caused
+                if(n.alive&&!n.isGuilty){
                     switch(n.stateMachine.currentState.GetType().ToString()){
                         case "Roaming":
                         case "Sitting":
                         case "GoingToSit":
                         case "GettingGarbage":
                             GetNewMurderWeapon();
+                            G.Remove(n.gameObject);
                             return n;
                     }//change to check if they are in their home
-                G.Remove(n.gameObject);
+                }
             }
+            neighbour.stateMachine.ChangeState(States.BreakingIn);
             return null;
         }
         else{
             GameObject.Find("GameManager").GetComponent<GameManagerScript>().GameOver("Neighbour");
             return null;
         }
-    }
+    } */
     public void KillNeighbour(Neighbour n){
-        Debug.Log("Killed "+n.address+" with "+NM.currentWeapon.evidenceType);
-        n.Die(NM.currentWeapon);
-        neighbour.murderWeaponsList.Add(NM.currentWeapon);
-        neighbour.victims.Add(n);
-        n.ChangeVisibility(true);
+        if(n!=null){
+            Debug.Log("Killed "+n.address+" with "+NM.currentWeapon.evidenceType);
+            n.Die(NM.currentWeapon);
+            neighbour.murderWeaponsList.Add(NM.currentWeapon);
+            neighbour.victims.Add(n);
+            n.ChangeVisibility(true);
+        }
     }
     public void GetNewMurderWeapon(){
         NM.currentWeapon = NM.murderWeapons[neighbour.stateMachine.killRand.Next(0, NM.murderWeapons.Count)];
@@ -573,33 +663,21 @@ public class KillingPlayer:State{
 public class GoingToMail:State{
     private Vector3 mailLoc;
     public override void Enter(){
-        mailLoc = new Vector3(1.035369f, -3.802456f, 7.775452f);
+        mailLoc = GameObject.Find("mailbox").transform.position;
         base.Enter();
         neighbour.agent.SetDestination(mailLoc);
         PlayFootstepsAudio();
     }
     public override void Execute(){
         CheckForDoorClosed();
-        if(Vector3.Distance(neighbour.transform.position, mailLoc)<=1f)
-            neighbour.stateMachine.ChangeState(States.GettingMail);
-    }
-}
-public class GettingMail:State{
-    public override void Enter(){
-        base.Enter();
-        neighbour.agent.ResetPath();
-        neighbour.transform.localEulerAngles = new Vector3(0f,180f,0f);
-        duration = 20f;
-        start = DateTime.Now;
-    }
-    public override void Execute(){
-        if(neighbour.isGuilty){
+        if(Vector3.Distance(neighbour.transform.position, mailLoc)<=1.6f){
+            neighbour.stateMachine.ChangeState(States.GoHome);
+            if(neighbour.isGuilty){
             foreach(Package p in neighbour.player.packages){
                 GameObject.Destroy(p.gameObject);
             }
         }
-        if(DateTime.Now-start>=TimeSpan.FromSeconds(duration))
-            neighbour.stateMachine.ChangeState(States.GoHome);
+        }
     }
 }
 public class GoHome:State{
@@ -632,6 +710,7 @@ public class GettingGarbage:State{
             if(Vector3.Distance(neighbour.transform.position, Garbage.transform.position)<=1.5f){
                 Garbage.transform.parent = neighbour.transform.GetChild(5).GetChild(2).GetChild(0).GetChild(0).GetChild(2).GetChild(0).GetChild(0).GetChild(0);
                 Garbage.transform.SetAsLastSibling();
+                Garbage.transform.localPosition = new Vector3(0.013f, 0.569f, 0.194f);
                 neighbour.stateMachine.ChangeState(States.GoingToGarbage);
             }
         }catch(Exception e){
