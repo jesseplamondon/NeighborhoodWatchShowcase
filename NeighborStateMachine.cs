@@ -292,12 +292,6 @@ public class Leaving:State{
                         neighbour.stateMachine.ChangeState(States.Left);
                         break;
                     default:
-                        /* neighbour.car.gameObject.SetActive(false);
-                        if(neighbour.player.inPlayerHouse||neighbour.player.hidden)
-                            neighbour.stateMachine.ChangeState(States.BreakingIn);
-                        else{
-                            neighbour.stateMachine.ChangeState(States.Searching);
-                        } */
                         neighbour.stateMachine.ChangeState(States.Attacking);
                         break;
                 }
@@ -579,31 +573,6 @@ public class KillingNeighbour:State{
         GameObject.Destroy(Attacker);
         neighbour.stateMachine.maxKillStart = DateTime.Now;
     }
-    /* public Neighbour GetNeighbour(){
-        if(NM.neighbours.Count!=0){
-            List<GameObject> G = NM.neighbours;
-            for(int i = 0; i<NM.neighbours.Count;i++){
-                Neighbour n = G[rand.Next(0, G.Count)].GetComponent<Neighbour>();//stackoverflow caused
-                if(n.alive&&!n.isGuilty){
-                    switch(n.stateMachine.currentState.GetType().ToString()){
-                        case "Roaming":
-                        case "Sitting":
-                        case "GoingToSit":
-                        case "GettingGarbage":
-                            GetNewMurderWeapon();
-                            G.Remove(n.gameObject);
-                            return n;
-                    }//change to check if they are in their home
-                }
-            }
-            neighbour.stateMachine.ChangeState(States.BreakingIn);
-            return null;
-        }
-        else{
-            GameObject.Find("GameManager").GetComponent<GameManagerScript>().GameOver("Neighbour");
-            return null;
-        }
-    } */
     public void KillNeighbour(Neighbour n){
         if(n!=null){
             Debug.Log("Killed "+n.address+" with "+NM.currentWeapon.evidenceType);
@@ -642,7 +611,7 @@ public class WaitingToKillPlayer:State{
                     //set attacker position
                     NeighbourAttackerObject.transform.position = new Vector3(-9.658434f, -3.67765f, -13.2f);
                     NeighbourAttackerObject.transform.localEulerAngles = new Vector3(0f,180f,0f);
-                    break; //need to change
+                    break;
             }
             neighbour.stateMachine.ChangeState(States.KillingPlayer);
         }
